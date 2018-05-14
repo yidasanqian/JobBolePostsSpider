@@ -16,9 +16,10 @@ from .items import JobBoleArticle
 class JobBolePostsMysqlPipeline(object):
     def __init__(self, mysql_host, mysql_port, mysql_user, mysql_password, mysql_db_name):
         # 初始化数据库连接:
-        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}?charset=utf8'.format(mysql_user, mysql_password,
-                                                                                           mysql_host, mysql_port,
-                                                                                           mysql_db_name))
+        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}'.format(mysql_user, mysql_password,
+                                                                              mysql_host, mysql_port,
+                                                                              mysql_db_name),
+                               pool_recycle=180, echo=False)
         # 创建session_maker类型:
         session_maker = sessionmaker(bind=engine)
         self.db_session = session_maker()

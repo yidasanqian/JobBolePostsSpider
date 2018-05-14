@@ -15,17 +15,26 @@ class JobBolePostsSpider(scrapy.Spider):
     name = 'JobBolePostsSpider'
     start_urls = ['http://blog.jobbole.com/all-posts/']
 
-    def parse(self, response):
+    def start_requests(self):
         mysql_host = self.crawler.settings.get("MYSQL_HOST")
         mysql_port = self.crawler.settings.get("MYSQL_PORT")
         mysql_user = self.crawler.settings.get("MYSQL_USER")
         mysql_password = self.crawler.settings.get("MYSQL_PASSWORD")
         mysql_db_name = self.crawler.settings.get("MYSQL_DB_NAME")
-        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}?charset=utf8'.format(mysql_user, mysql_password,
-                                                                                           mysql_host, mysql_port,
-                                                                                           mysql_db_name), echo=False)
+        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}'.format(mysql_user, mysql_password,
+                                                                              mysql_host, mysql_port,
+                                                                              mysql_db_name),
+                               pool_recycle=180, echo=False)
         session_maker = sessionmaker(bind=engine)
-        db_session = session_maker()
+        self.db_session = session_maker()
+
+        for url in self.start_urls:
+            yield scrapy.Request(url)
+
+    def parse(self, response):
+        if self.db_session is None:
+            self.logger.error("db_session is None")
+            return None
 
         """
         1.获取文章列表也中具体文章url,并交给scrapy进行下载后并进行解析
@@ -33,34 +42,39 @@ class JobBolePostsSpider(scrapy.Spider):
         :param response:
         :return:
         """
-        post_nodes = response.css('#archive .floated-thumb .post-thumb a')
-        for post_node in post_nodes:
-            post_url = post_node.css('::attr(href)').extract_first().strip()
-            url_object_id = self.get_md5(post_url)
-            count = 0
-            try:
-                count = db_session.query(func.count()).filter(JobBoleArticle.url_object_id == url_object_id).first()
-                if count:
-                    count = count[0]
-            except Exception as e:
-                self.logger.error("查询数据库异常，原因：{}".format(e))
-
-            if count:
-                self.logger.info("数据库已有该数据url_object_id：%s" % url_object_id)
-            else:
-                image_url = post_node.css('img::attr(src)').extract_first().strip()
-                yield response.follow(url=post_url,
-                                      meta={"front_image_url": image_url},
-                                      callback=self.parse_detail)
-
-        # 提取下一页并交给scrapy下载
-        next_url = response.css('.next.page-numbers::attr(href)').extract_first()
-        if next_url:
-            self.logger.info("Next page：%s" % next_url)
-            yield response.follow(next_url, self.parse)
+        if response is None:
+            self.logger.warn("文章列表页响应为空，不做处理！")
         else:
-            self.logger.info("None Next page!")
-            db_session.close()
+            post_nodes = response.css('#archive .floated-thumb .post-thumb a')
+            for post_node in post_nodes:
+                post_url = post_node.css('::attr(href)').extract_first().strip()
+                url_object_id = self.get_md5(post_url)
+                count = 0
+                try:
+                    count = self.db_session.query(func.count()).filter(
+                        JobBoleArticle.url_object_id == url_object_id).first()
+                    if count:
+                        count = count[0]
+                except Exception as e:
+                    self.logger.error("查询数据库异常，原因：{}".format(e))
+
+                if count:
+                    self.logger.info("数据库已有该数据url_object_id：%s" % url_object_id)
+                    continue
+                else:
+                    image_url = post_node.css('img::attr(src)').extract_first().strip()
+                    yield response.follow(url=post_url,
+                                          meta={"front_image_url": image_url},
+                                          callback=self.parse_detail)
+
+            # 提取下一页并交给scrapy下载
+            next_url = response.css('.next.page-numbers::attr(href)').extract_first()
+            if next_url:
+                self.logger.info("Next page：%s" % next_url)
+                yield response.follow(next_url, self.parse)
+            else:
+                self.logger.info("None Next page!")
+                self.db_session.close()
 
     def parse_detail(self, response):
         """
