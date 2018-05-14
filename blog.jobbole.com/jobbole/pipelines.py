@@ -7,7 +7,7 @@
 import pymongo
 from scrapy.exceptions import DropItem
 from scrapy.pipelines.images import ImagesPipeline
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from .items import JobBoleArticle
@@ -62,6 +62,7 @@ class JobBolePostsMysqlPipeline(object):
             self.db_session.commit()
         except Exception as e:
             spider.logger.error("插入数据库异常url_object_id:{}，原因：{}".format(url_object_id, e))
+            self.db_session.rollback()
         return item
 
 
@@ -117,33 +118,13 @@ class JobBolePostsDuplicatesPipeline(object):
     去重方法如下：这里初始化了一个集合，每次判断id是否在集合中已经存在，从而做到去重的功能
     """
 
-    def __init__(self, mysql_host, mysql_port, mysql_user, mysql_password, mysql_db_name):
-        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}?charset=utf8'.format(mysql_user, mysql_password,
-                                                                                           mysql_host, mysql_port,
-                                                                                           mysql_db_name), echo=True)
-        session_maker = sessionmaker(bind=engine)
-        self.db_session = session_maker()
-
+    def __init__(self):
         self.url_object_ids = set()
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        return cls(
-            mysql_host=crawler.settings.get("MYSQL_HOST"),
-            mysql_port=crawler.settings.get("MYSQL_PORT"),
-            mysql_user=crawler.settings.get("MYSQL_USER"),
-            mysql_password=crawler.settings.get("MYSQL_PASSWORD"),
-            mysql_db_name=crawler.settings.get("MYSQL_DB_NAME"),
-        )
 
     def process_item(self, item, spider):
         url_object_id = item['url_object_id']
-        count = self.db_session.query(func.count()).filter(JobBoleArticle.url_object_id == url_object_id).first()
-        if count:
-            count = count[0]
-        else:
-            count = 0
-        if item['url_object_id'] in self.url_object_ids or count:
+
+        if item['url_object_id'] in self.url_object_ids:
             raise DropItem("Duplicate url_object_id of item found: %s" % url_object_id)
         else:
             self.url_object_ids.add(url_object_id)
