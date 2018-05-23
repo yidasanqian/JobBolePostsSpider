@@ -9,11 +9,14 @@ from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
 from ..items import JobBoleArticleItem, JobBoleArticle
+from ..utils.const import const
 
 
 class JobBolePostsSpider(scrapy.Spider):
     name = 'JobBolePostsSpider'
     start_urls = ['http://blog.jobbole.com/all-posts/']
+
+    const.REPEATED_THRESHOLD = 10
 
     def start_requests(self):
         mysql_host = self.crawler.settings.get("MYSQL_HOST")
@@ -42,6 +45,7 @@ class JobBolePostsSpider(scrapy.Spider):
         :param response:
         :return:
         """
+        repeated_count = 0
         if response is None:
             self.logger.warn("文章列表页响应为空，不做处理！")
         else:
@@ -60,6 +64,7 @@ class JobBolePostsSpider(scrapy.Spider):
 
                 if count:
                     self.logger.info("数据库已有该数据url_object_id：%s" % url_object_id)
+                    repeated_count += 1
                     continue
                 else:
                     image_url = post_node.css('img::attr(src)').extract_first().strip()
@@ -69,11 +74,12 @@ class JobBolePostsSpider(scrapy.Spider):
 
             # 提取下一页并交给scrapy下载
             next_url = response.css('.next.page-numbers::attr(href)').extract_first()
-            if next_url:
+            # 如果url重复次数超过阈值则停止爬取
+            if next_url and repeated_count < const.REPEATED_THRESHOLD:
                 self.logger.info("Next page：%s" % next_url)
                 yield response.follow(next_url, self.parse)
             else:
-                self.logger.info("None Next page!")
+                self.logger.info("None Next page!重复次数：%s" % repeated_count)
                 self.db_session.close()
 
     def parse_detail(self, response):
