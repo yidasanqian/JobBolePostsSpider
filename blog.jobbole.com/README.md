@@ -147,6 +147,8 @@ password = yidasanqian.
 scrapyd-deploy remote-scrapyd -d -p jobbole
 ```
 
+>Note:如果配置了Nginx反向代理需要修改scrapyd的website.py模块的源码，将html的a标签的href的反斜杠“/”删除。
+
 3、 调度
 
 [windows环境下 curl 安装和使用](https://blog.csdn.net/qq_21126979/article/details/78690960?locationNum=10&fps=1)
