@@ -10,6 +10,7 @@
 #### 安装教程
 
 ```
+pip install pywin32
 pip install mysql-connector-python
 pip install Pillow
 pip install PyMySQL
