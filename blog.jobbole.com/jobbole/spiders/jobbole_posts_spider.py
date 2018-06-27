@@ -18,6 +18,10 @@ class JobBolePostsSpider(scrapy.Spider):
 
     const.REPEATED_THRESHOLD = 10
 
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name=None, **kwargs)
+        self.db_session = None
+
     def start_requests(self):
         mysql_host = self.crawler.settings.get("MYSQL_HOST")
         mysql_port = self.crawler.settings.get("MYSQL_PORT")
@@ -61,6 +65,8 @@ class JobBolePostsSpider(scrapy.Spider):
                         count = count[0]
                 except Exception as e:
                     self.logger.error("查询数据库异常，原因：{}".format(e))
+                finally:
+                    self.db_session.rollback()
 
                 if count:
                     self.logger.info("数据库已有该数据url_object_id：%s" % url_object_id)

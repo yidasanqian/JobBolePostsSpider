@@ -7,38 +7,17 @@
 import pymongo
 from scrapy.exceptions import DropItem
 from scrapy.pipelines.images import ImagesPipeline
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from .items import JobBoleArticle
 
 
 class JobBolePostsMysqlPipeline(object):
-    def __init__(self, mysql_host, mysql_port, mysql_user, mysql_password, mysql_db_name):
-        # 初始化数据库连接:
-        engine = create_engine('mysql+mysqlconnector://{}:{}@{}:{}/{}'.format(mysql_user, mysql_password,
-                                                                              mysql_host, mysql_port,
-                                                                              mysql_db_name),
-                               pool_recycle=180, echo=False)
-        # 创建session_maker类型:
-        session_maker = sessionmaker(bind=engine)
-        self.db_session = session_maker()
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        return cls(
-            mysql_host=crawler.settings.get("MYSQL_HOST"),
-            mysql_port=crawler.settings.get("MYSQL_PORT"),
-            mysql_user=crawler.settings.get("MYSQL_USER"),
-            mysql_password=crawler.settings.get("MYSQL_PASSWORD"),
-            mysql_db_name=crawler.settings.get("MYSQL_DB_NAME"),
-        )
 
     def open_spider(self, spider):
         pass
 
     def close_spider(self, spider):
-        self.db_session.close()
+        spider.db_session.close()
 
     def process_item(self, item, spider):
         """不下载图片，所以路径设为空"""
@@ -57,13 +36,14 @@ class JobBolePostsMysqlPipeline(object):
 
         jobbole_article = JobBoleArticle(title, create_date, url, url_object_id, front_image_url, front_image_path,
                                          praise_nums, fav_nums, comment_nums, tag, content)
-        self.db_session.add(jobbole_article)
         try:
+            spider.db_session.add(jobbole_article)
             # 提交即保存到数据库:
-            self.db_session.commit()
+            spider.db_session.commit()
         except Exception as e:
             spider.logger.error("插入数据库异常url_object_id:{}，原因：{}".format(url_object_id, e))
-            self.db_session.rollback()
+        finally:
+            spider.db_session.rollback()
         return item
 
 
