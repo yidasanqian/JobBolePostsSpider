@@ -164,6 +164,34 @@ curl http://127.0.0.1:80/schedule.json -d project=jobbole -d spider=JobBolePosts
 curl -u yidasanqian:yidasanqian. http://40.125.175.187:80/scrapyd/schedule.json -d project=jobbole -d spider=JobBolePostsSpider
 ```
 
+**利用Linux系统的crontab进行定时调度：**
+
+首先创建定时调度脚本jobbole-schedule.sh:
+```
+#!/usr/bin/env bash
+curl -u yidasanqian:yidasanqian. http://127.0.0.1:80/scrapyd/schedule.json -d project=jobbole -d spider=JobBolePostsSpider
+```
+然后配置定时任务：
+
+使用以下命令配置：
+```
+crontab -e
+```
+添加内容：
+```
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+HOME=/home/yidasanqian
+
+0 2 * * * $HOME/jobbole-schedule.sh >> /var/log/scrapyd/jobbole-schedule.log
+
+```
+最后让配置生效：
+```
+service crond reload
+```
+
 #### 参与贡献
 
 1. Fork 本项目
